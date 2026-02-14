@@ -1,0 +1,94 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #1e214f 0%, #070914 55%, #03030a 100%);
+  color: #f4f6ff;
+}
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(290px, 380px) 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  min-height: 100vh;
+}
+
+.hud-panel,
+.canvas-panel {
+  background: rgba(12, 16, 35, 0.88);
+  border: 1px solid #2c3d75;
+  border-radius: 14px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
+}
+
+.hud-panel {
+  padding: 1rem 1.2rem;
+}
+
+h1 {
+  font-size: 1.35rem;
+  margin-top: 0;
+}
+
+h2 {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  margin: 1rem 0;
+}
+
+.stats div {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed #3f4e82;
+  padding-bottom: 0.2rem;
+}
+
+.controls ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.story-panel {
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border-radius: 10px;
+  border: 1px solid #455ab0;
+  background: rgba(37, 49, 97, 0.45);
+  line-height: 1.35;
+}
+
+.canvas-panel {
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+}
+
+canvas {
+  width: 100%;
+  max-width: 960px;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  border: 1px solid #3d4f8a;
+  background: #03060f;
+}
+
+@media (max-width: 980px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+}
