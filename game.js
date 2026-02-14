@@ -5,6 +5,7 @@ const ui = {
   level: document.getElementById("levelLabel"),
   score: document.getElementById("scoreLabel"),
   health: document.getElementById("healthLabel"),
+  grenades: document.getElementById("grenadeLabel"),
   character: document.getElementById("characterLabel"),
   story: document.getElementById("storyPanel")
 };
@@ -13,8 +14,7 @@ const levels = [
   {
     name: "Nebula Run",
     crew: "Captain Rhea Starflare",
-    story:
-      "Rhea leads the Iron Tide through a glowing nebula while fending off scavenger drones sent by Dread Corsair Varn.",
+    story: "Rhea leads the Iron Tide through a glowing nebula while fending off scavenger drones sent by Dread Corsair Varn.",
     enemyColor: "#ff7b7b",
     enemySpeed: 1.4,
     spawnRate: 0.03,
@@ -24,8 +24,7 @@ const levels = [
   {
     name: "Moon of Rust",
     crew: "Navigator Jax Comet & Engineer Nyla Flux",
-    story:
-      "Jax and Nyla navigate wreckage fields around the Moon of Rust while rival raiders strike from cover.",
+    story: "Jax and Nyla navigate wreckage fields around the Moon of Rust while rival raiders strike from cover.",
     enemyColor: "#ffd166",
     enemySpeed: 1.8,
     spawnRate: 0.042,
@@ -35,8 +34,7 @@ const levels = [
   {
     name: "Kraken Gate",
     crew: "Gunner Bytebeard + First Mate Sol Rift",
-    story:
-      "At the ancient Kraken Gate, Bytebeard and Sol unleash broadside plasma cannons against the Void Armada.",
+    story: "At the ancient Kraken Gate, Bytebeard and Sol unleash broadside plasma cannons against the Void Armada.",
     enemyColor: "#8ecae6",
     enemySpeed: 2.2,
     spawnRate: 0.055,
@@ -46,13 +44,14 @@ const levels = [
 ];
 
 const game = {
-  running: true,
   paused: false,
   score: 0,
   stars: Array.from({ length: 120 }, () => ({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 2 })),
   bullets: [],
+  grenades: [],
   enemies: [],
   enemyBullets: [],
+  explosions: [],
   levelIndex: 0,
   boss: null,
   bossActive: false,
@@ -63,23 +62,28 @@ const game = {
 const player = {
   x: 110,
   y: canvas.height / 2,
-  width: 52,
-  height: 34,
+  width: 64,
+  height: 38,
   speed: 4.2,
   cooldown: 0,
-  health: 100
+  grenadeCooldown: 0,
+  health: 100,
+  grenades: 2,
+  damageFlash: 0
 };
 
 const keys = {};
 
 window.addEventListener("keydown", (event) => {
-  keys[event.key.toLowerCase()] = true;
-  if (event.key === " ") {
-    event.preventDefault();
-  }
-  if (event.key.toLowerCase() === "p") game.paused = !game.paused;
-  if (event.key.toLowerCase() === "r" && (game.gameOver || game.win)) {
-    resetGame();
+  const key = event.key.toLowerCase();
+  keys[key] = true;
+
+  if (event.key === " ") event.preventDefault();
+  if (key === "p") game.paused = !game.paused;
+  if (key === "r" && (game.gameOver || game.win)) resetGame();
+
+  if (key === "g" && !event.repeat) {
+    launchGrenade();
   }
 });
 
@@ -95,16 +99,24 @@ function resetGame() {
   game.score = 0;
   game.levelIndex = 0;
   game.bullets = [];
+  game.grenades = [];
   game.enemies = [];
   game.enemyBullets = [];
+  game.explosions = [];
   game.boss = null;
   game.bossActive = false;
   game.gameOver = false;
   game.win = false;
   game.paused = false;
+
   player.health = 100;
+  player.grenades = 2;
+  player.damageFlash = 0;
   player.x = 110;
   player.y = canvas.height / 2;
+  player.cooldown = 0;
+  player.grenadeCooldown = 0;
+
   updateHud();
 }
 
@@ -113,25 +125,96 @@ function updateHud() {
   ui.level.textContent = `${game.levelIndex + 1} - ${level.name}`;
   ui.score.textContent = game.score;
   ui.health.textContent = Math.max(0, Math.floor(player.health));
+  ui.grenades.textContent = player.grenades;
   ui.character.textContent = level.crew;
   ui.story.textContent = level.story;
 }
 
+function takePlayerDamage(amount) {
+  player.health -= amount;
+  player.damageFlash = 10;
+}
+
+function spawnExplosion(x, y, color = "#ff9f1c", radius = 50) {
+  const particles = Array.from({ length: 24 }, () => {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 4;
+    return {
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 24 + Math.floor(Math.random() * 10),
+      size: 2 + Math.random() * 3,
+      color
+    };
+  });
+  game.explosions.push({ x, y, particles, shockwave: radius, life: 18 });
+}
+
 function shoot() {
-  game.bullets.push({ x: player.x + player.width, y: player.y + player.height / 2, vx: 8, vy: 0, size: 4 });
+  game.bullets.push({ x: player.x + player.width, y: player.y + player.height / 2, vx: 8.8, size: 4 });
+}
+
+function launchGrenade() {
+  if (game.paused || game.gameOver || game.win) return;
+  if (player.grenades <= 0 || player.grenadeCooldown > 0) return;
+
+  game.grenades.push({
+    x: player.x + player.width,
+    y: player.y + player.height / 2,
+    vx: 4.8,
+    life: 130,
+    radius: 120,
+    exploded: false
+  });
+  player.grenades -= 1;
+  player.grenadeCooldown = 25;
+}
+
+function detonateGrenade(grenade) {
+  if (grenade.exploded) return;
+  grenade.exploded = true;
+  spawnExplosion(grenade.x, grenade.y, "#ffbf69", grenade.radius);
+
+  game.enemies.forEach((enemy) => {
+    const ex = enemy.x + enemy.size / 2;
+    const ey = enemy.y + enemy.size / 2;
+    const dist = Math.hypot(ex - grenade.x, ey - grenade.y);
+    if (dist <= grenade.radius) {
+      enemy.dead = true;
+      game.score += 35;
+      spawnExplosion(ex, ey, enemy.color, 45);
+    }
+  });
+
+  if (game.bossActive && game.boss) {
+    const bx = game.boss.x + game.boss.width / 2;
+    const by = game.boss.y + game.boss.height / 2;
+    const dist = Math.hypot(bx - grenade.x, by - grenade.y);
+    if (dist <= grenade.radius + 50) {
+      game.boss.health -= 50;
+      if (game.boss.health <= 0) {
+        game.score += 200;
+        spawnExplosion(bx, by, game.boss.color, 140);
+        progressLevel();
+      }
+    }
+  }
 }
 
 function spawnEnemy() {
   const level = currentLevel();
   if (Math.random() < level.spawnRate && !game.bossActive) {
-    const size = 28 + Math.random() * 20;
+    const size = 28 + Math.random() * 16;
     game.enemies.push({
       x: canvas.width + size,
       y: 20 + Math.random() * (canvas.height - 80),
       size,
       vx: level.enemySpeed + Math.random() * 1.3,
       color: level.enemyColor,
-      hp: 20 + game.levelIndex * 12
+      hp: 24 + game.levelIndex * 12,
+      thruster: Math.random() * Math.PI * 2
     });
   }
 }
@@ -141,10 +224,10 @@ function maybeSpawnBoss() {
   if (!game.bossActive && game.score >= level.targetScore) {
     game.bossActive = true;
     game.boss = {
-      x: canvas.width - 140,
-      y: canvas.height / 2 - 80,
-      width: 160,
-      height: 140,
+      x: canvas.width - 150,
+      y: canvas.height / 2 - 84,
+      width: 170,
+      height: 150,
       health: level.boss.health,
       dir: 1,
       speed: level.boss.speed,
@@ -160,6 +243,7 @@ function progressLevel() {
     game.levelIndex += 1;
     game.enemies = [];
     game.enemyBullets = [];
+    game.grenades = [];
     game.boss = null;
     game.bossActive = false;
     player.health = Math.min(100, player.health + 25);
@@ -185,6 +269,8 @@ function update() {
   player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
 
   if (player.cooldown > 0) player.cooldown -= 1;
+  if (player.grenadeCooldown > 0) player.grenadeCooldown -= 1;
+
   if (keys[" "] && player.cooldown <= 0) {
     shoot();
     player.cooldown = 9;
@@ -206,8 +292,22 @@ function update() {
   });
   game.bullets = game.bullets.filter((b) => b.x < canvas.width + 10);
 
+  game.grenades.forEach((grenade) => {
+    grenade.x += grenade.vx;
+    grenade.life -= 1;
+
+    if (!grenade.exploded) {
+      const nearEnemy = game.enemies.some((enemy) => Math.hypot(enemy.x - grenade.x, enemy.y - grenade.y) < enemy.size + 15);
+      if (nearEnemy || grenade.life <= 0 || grenade.x > canvas.width * 0.8) {
+        detonateGrenade(grenade);
+      }
+    }
+  });
+  game.grenades = game.grenades.filter((grenade) => !grenade.exploded);
+
   game.enemies.forEach((enemy) => {
     enemy.x -= enemy.vx;
+    enemy.thruster += 0.2;
     if (Math.random() < 0.01 + game.levelIndex * 0.004) {
       game.enemyBullets.push({ x: enemy.x, y: enemy.y + enemy.size / 2, vx: -(3.1 + game.levelIndex), size: 4 });
     }
@@ -217,7 +317,6 @@ function update() {
     bullet.x += bullet.vx;
   });
   game.enemyBullets = game.enemyBullets.filter((b) => b.x > -20);
-
   game.enemies = game.enemies.filter((enemy) => enemy.x + enemy.size > -40);
 
   if (game.bossActive && game.boss) {
@@ -226,18 +325,11 @@ function update() {
 
     if (game.boss.fireCooldown > 0) game.boss.fireCooldown -= 1;
     if (game.boss.fireCooldown <= 0) {
-      game.enemyBullets.push({
-        x: game.boss.x,
-        y: game.boss.y + game.boss.height / 2,
-        vx: -4.8,
-        size: 6,
-        boss: true
-      });
+      game.enemyBullets.push({ x: game.boss.x, y: game.boss.y + game.boss.height / 2, vx: -4.8, size: 6, boss: true });
       game.boss.fireCooldown = 32;
     }
   }
 
-  // bullet vs enemies
   game.bullets.forEach((bullet) => {
     game.enemies.forEach((enemy) => {
       const hit = bullet.x > enemy.x && bullet.x < enemy.x + enemy.size && bullet.y > enemy.y && bullet.y < enemy.y + enemy.size;
@@ -247,6 +339,7 @@ function update() {
         if (enemy.hp <= 0) {
           enemy.dead = true;
           game.score += 30;
+          spawnExplosion(enemy.x + enemy.size / 2, enemy.y + enemy.size / 2, enemy.color, 45);
         }
       }
     });
@@ -260,6 +353,7 @@ function update() {
         game.score += 2;
         if (b.health <= 0) {
           game.score += 180;
+          spawnExplosion(b.x + b.width / 2, b.y + b.height / 2, b.color, 140);
           progressLevel();
         }
       }
@@ -273,54 +367,173 @@ function update() {
   game.enemies.forEach((enemy) => {
     const enemyRect = { x: enemy.x, y: enemy.y, width: enemy.size, height: enemy.size };
     if (rectCollision(playerRect, enemyRect)) {
-      player.health -= 16;
+      takePlayerDamage(16);
       enemy.dead = true;
+      spawnExplosion(enemy.x + enemy.size / 2, enemy.y + enemy.size / 2, enemy.color, 40);
     }
   });
 
   game.enemyBullets.forEach((bullet) => {
-    if (
-      bullet.x > player.x &&
-      bullet.x < player.x + player.width &&
-      bullet.y > player.y &&
-      bullet.y < player.y + player.height
-    ) {
-      player.health -= bullet.boss ? 14 : 8;
+    if (bullet.x > player.x && bullet.x < player.x + player.width && bullet.y > player.y && bullet.y < player.y + player.height) {
+      takePlayerDamage(bullet.boss ? 14 : 8);
       bullet.x = -100;
     }
   });
 
   if (game.bossActive && game.boss) {
-    const bossRect = {
-      x: game.boss.x,
-      y: game.boss.y,
-      width: game.boss.width,
-      height: game.boss.height
-    };
+    const bossRect = { x: game.boss.x, y: game.boss.y, width: game.boss.width, height: game.boss.height };
     if (rectCollision(playerRect, bossRect)) {
-      player.health -= 0.7;
+      takePlayerDamage(0.7);
     }
   }
 
-  if (player.health <= 0) {
-    game.gameOver = true;
-  }
+  if (player.damageFlash > 0) player.damageFlash -= 1;
+
+  game.explosions.forEach((blast) => {
+    blast.life -= 1;
+    blast.particles.forEach((particle) => {
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.vx *= 0.97;
+      particle.vy *= 0.97;
+      particle.life -= 1;
+    });
+    blast.particles = blast.particles.filter((particle) => particle.life > 0);
+  });
+  game.explosions = game.explosions.filter((blast) => blast.life > 0 || blast.particles.length > 0);
+
+  if (player.health <= 0) game.gameOver = true;
 
   updateHud();
 }
 
-function drawShip(x, y, color = "#4cc9f0") {
-  ctx.fillStyle = color;
+function drawPlayerShip() {
+  const flashing = player.damageFlash > 0 && player.damageFlash % 2 === 0;
+  const hull = flashing ? "#ff8c42" : "#4cc9f0";
+  const wing = flashing ? "#ffc37b" : "#7bdff2";
+
+  ctx.save();
+  ctx.translate(player.x, player.y);
+
+  ctx.fillStyle = wing;
   ctx.beginPath();
-  ctx.moveTo(x, y + player.height / 2);
-  ctx.lineTo(x + player.width * 0.75, y);
-  ctx.lineTo(x + player.width, y + player.height / 2);
-  ctx.lineTo(x + player.width * 0.75, y + player.height);
+  ctx.moveTo(4, 4);
+  ctx.lineTo(32, 10);
+  ctx.lineTo(10, player.height - 4);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = "#b8f2ff";
-  ctx.fillRect(x + 12, y + 12, 14, 10);
+  ctx.beginPath();
+  ctx.moveTo(4, player.height - 4);
+  ctx.lineTo(32, player.height - 10);
+  ctx.lineTo(10, 4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = hull;
+  ctx.beginPath();
+  ctx.moveTo(6, player.height / 2);
+  ctx.lineTo(player.width * 0.72, 4);
+  ctx.lineTo(player.width - 2, player.height / 2);
+  ctx.lineTo(player.width * 0.72, player.height - 4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#d4f4ff";
+  ctx.fillRect(22, 13, 20, 12);
+
+  ctx.fillStyle = flashing ? "#ffd166" : "#ff7f50";
+  const flameSize = 5 + Math.random() * 6;
+  ctx.beginPath();
+  ctx.moveTo(0, player.height / 2);
+  ctx.lineTo(-flameSize, player.height / 2 - 5);
+  ctx.lineTo(-flameSize, player.height / 2 + 5);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawEnemyDrone(enemy) {
+  ctx.save();
+  ctx.translate(enemy.x, enemy.y);
+
+  ctx.fillStyle = enemy.color;
+  ctx.beginPath();
+  ctx.moveTo(enemy.size, enemy.size / 2);
+  ctx.lineTo(enemy.size * 0.68, 2);
+  ctx.lineTo(enemy.size * 0.28, 6);
+  ctx.lineTo(0, enemy.size / 2);
+  ctx.lineTo(enemy.size * 0.28, enemy.size - 6);
+  ctx.lineTo(enemy.size * 0.68, enemy.size - 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(enemy.size * 0.2, enemy.size * 0.2, enemy.size * 0.55, enemy.size * 0.6);
+
+  ctx.fillStyle = "#ffd6a5";
+  ctx.fillRect(enemy.size * 0.56, enemy.size * 0.41, enemy.size * 0.2, enemy.size * 0.14);
+
+  const thruster = 3 + Math.sin(enemy.thruster) * 2;
+  ctx.fillStyle = "#ff8fab";
+  ctx.fillRect(-thruster, enemy.size * 0.45, thruster, enemy.size * 0.1);
+
+  ctx.restore();
+}
+
+function drawBossShip() {
+  const boss = game.boss;
+  if (!boss) return;
+
+  ctx.fillStyle = boss.color;
+  ctx.fillRect(boss.x, boss.y + 18, boss.width, boss.height - 36);
+
+  ctx.beginPath();
+  ctx.moveTo(boss.x + boss.width, boss.y + boss.height / 2);
+  ctx.lineTo(boss.x + boss.width - 32, boss.y + 2);
+  ctx.lineTo(boss.x + 32, boss.y + 18);
+  ctx.lineTo(boss.x + 32, boss.y + boss.height - 18);
+  ctx.lineTo(boss.x + boss.width - 32, boss.y + boss.height - 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(boss.x + 20, boss.y + 30, boss.width - 52, boss.height - 60);
+
+  ctx.fillStyle = "#fefefe";
+  ctx.font = "15px sans-serif";
+  ctx.fillText(boss.name, boss.x + 10, boss.y - 10);
+
+  const w = 180;
+  const hpPct = Math.max(0, boss.health) / currentLevel().boss.health;
+  ctx.fillStyle = "#111";
+  ctx.fillRect(canvas.width - w - 20, 14, w, 14);
+  ctx.fillStyle = "#ff595e";
+  ctx.fillRect(canvas.width - w - 20, 14, w * hpPct, 14);
+}
+
+function drawExplosions() {
+  game.explosions.forEach((blast) => {
+    if (blast.life > 0) {
+      ctx.globalAlpha = blast.life / 18;
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(blast.x, blast.y, blast.shockwave * (1 - blast.life / 18), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    blast.particles.forEach((particle) => {
+      ctx.globalAlpha = Math.max(0.2, particle.life / 30);
+      ctx.fillStyle = particle.color;
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+  });
 }
 
 function draw() {
@@ -339,11 +552,20 @@ function draw() {
     ctx.fill();
   });
 
-  drawShip(player.x, player.y);
+  drawPlayerShip();
 
   game.bullets.forEach((bullet) => {
     ctx.fillStyle = "#8cffb2";
     ctx.fillRect(bullet.x, bullet.y - bullet.size / 2, bullet.size * 2, bullet.size);
+  });
+
+  game.grenades.forEach((grenade) => {
+    ctx.fillStyle = "#ffbf69";
+    ctx.beginPath();
+    ctx.arc(grenade.x, grenade.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff1c1";
+    ctx.fillRect(grenade.x - 2, grenade.y - 2, 4, 4);
   });
 
   game.enemyBullets.forEach((bullet) => {
@@ -351,28 +573,11 @@ function draw() {
     ctx.fillRect(bullet.x, bullet.y - bullet.size / 2, bullet.size * 2, bullet.size);
   });
 
-  game.enemies.forEach((enemy) => {
-    ctx.fillStyle = enemy.color;
-    ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
-    ctx.fillRect(enemy.x + 4, enemy.y + 4, enemy.size - 8, enemy.size - 8);
-  });
+  game.enemies.forEach(drawEnemyDrone);
 
-  if (game.bossActive && game.boss) {
-    const boss = game.boss;
-    ctx.fillStyle = boss.color;
-    ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
-    ctx.fillStyle = "#fefefe";
-    ctx.font = "15px sans-serif";
-    ctx.fillText(boss.name, boss.x + 10, boss.y - 10);
+  if (game.bossActive && game.boss) drawBossShip();
 
-    const w = 180;
-    const hpPct = Math.max(0, boss.health) / currentLevel().boss.health;
-    ctx.fillStyle = "#111";
-    ctx.fillRect(canvas.width - w - 20, 14, w, 14);
-    ctx.fillStyle = "#ff595e";
-    ctx.fillRect(canvas.width - w - 20, 14, w * hpPct, 14);
-  }
+  drawExplosions();
 
   ctx.fillStyle = "#fff";
   ctx.font = "17px sans-serif";
