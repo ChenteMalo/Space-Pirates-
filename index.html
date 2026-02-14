@@ -19,6 +19,11 @@
           <div><span>Level:</span> <strong id="levelLabel">1</strong></div>
           <div><span>Score:</span> <strong id="scoreLabel">0</strong></div>
           <div><span>High Score:</span> <strong id="highScoreLabel">0</strong></div>
+          <div id="highScoreEntry" class="high-score-entry hidden">
+            <label for="highScoreName">New High Score Pilot:</label>
+            <input id="highScoreName" maxlength="14" placeholder="Enter name" />
+            <button id="saveHighScoreBtn" type="button">Save</button>
+          </div>
           <div><span>Hull:</span> <strong id="healthLabel">100</strong></div>
           <div><span>Grenades:</span> <strong id="grenadeLabel">5</strong></div>
           <div><span>Crew:</span> <strong id="characterLabel">Captain Rhea Starflare</strong></div>
@@ -29,10 +34,12 @@
             <li>Move: Arrow Keys / WASD</li>
             <li>Shoot: Space bar</li>
             <li>Launch grenade: G (5 per run)</li>
-            <li>Collect power-ups for 15s twin-cannon mode</li>
+            <li>Power-up 1: double cannons (15s)</li>
+            <li>Power-up 2 while active: quad cannons (15s)</li>
             <li>Pause: P</li>
             <li>Restart after defeat: R</li>
           </ul>
+          <button id="musicToggleBtn" type="button">🎵 Start Epic Music</button>
         </div>
         <div id="storyPanel" class="story-panel"></div>
       </section>

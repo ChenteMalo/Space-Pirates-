@@ -58,8 +58,37 @@ h2 {
   padding-bottom: 0.2rem;
 }
 
+.high-score-entry {
+  display: grid !important;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  border: 1px solid #5f74cd !important;
+  border-radius: 10px;
+  padding: 0.5rem;
+  background: rgba(83, 103, 194, 0.2);
+}
+
+.high-score-entry input,
+.high-score-entry button,
+.controls button {
+  border: 1px solid #5f74cd;
+  border-radius: 8px;
+  background: rgba(18, 24, 54, 0.92);
+  color: #f4f6ff;
+  padding: 0.4rem 0.6rem;
+}
+
+.high-score-entry button,
+.controls button {
+  cursor: pointer;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .controls ul {
-  margin: 0.5rem 0 0;
+  margin: 0.5rem 0 0.8rem;
   padding-left: 1.2rem;
 }
 
