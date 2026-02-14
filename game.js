@@ -4,11 +4,15 @@ const ctx = canvas.getContext("2d");
 const ui = {
   level: document.getElementById("levelLabel"),
   score: document.getElementById("scoreLabel"),
+  highScore: document.getElementById("highScoreLabel"),
   health: document.getElementById("healthLabel"),
   grenades: document.getElementById("grenadeLabel"),
   character: document.getElementById("characterLabel"),
   story: document.getElementById("storyPanel")
 };
+
+const highScoreStorageKey = "spacePiratesHighScore";
+const storedHighScore = Number.parseInt(localStorage.getItem(highScoreStorageKey) || "0", 10);
 
 const levels = [
   {
@@ -51,7 +55,9 @@ const game = {
   grenades: [],
   enemies: [],
   enemyBullets: [],
+  powerUps: [],
   explosions: [],
+  highScore: Number.isFinite(storedHighScore) ? storedHighScore : 0,
   levelIndex: 0,
   boss: null,
   bossActive: false,
@@ -67,8 +73,9 @@ const player = {
   speed: 4.2,
   cooldown: 0,
   grenadeCooldown: 0,
+  doubleGunTimer: 0,
   health: 100,
-  grenades: 2,
+  grenades: 5,
   damageFlash: 0
 };
 
@@ -102,6 +109,7 @@ function resetGame() {
   game.grenades = [];
   game.enemies = [];
   game.enemyBullets = [];
+  game.powerUps = [];
   game.explosions = [];
   game.boss = null;
   game.bossActive = false;
@@ -110,8 +118,9 @@ function resetGame() {
   game.paused = false;
 
   player.health = 100;
-  player.grenades = 2;
+  player.grenades = 5;
   player.damageFlash = 0;
+  player.doubleGunTimer = 0;
   player.x = 110;
   player.y = canvas.height / 2;
   player.cooldown = 0;
@@ -124,10 +133,17 @@ function updateHud() {
   const level = currentLevel();
   ui.level.textContent = `${game.levelIndex + 1} - ${level.name}`;
   ui.score.textContent = game.score;
+  game.highScore = Math.max(game.highScore, game.score);
+  localStorage.setItem(highScoreStorageKey, String(game.highScore));
+  ui.highScore.textContent = game.highScore;
   ui.health.textContent = Math.max(0, Math.floor(player.health));
   ui.grenades.textContent = player.grenades;
   ui.character.textContent = level.crew;
-  ui.story.textContent = level.story;
+  if (player.doubleGunTimer > 0) {
+    ui.story.textContent = `${level.story} Twin-cannon mode active (${Math.ceil(player.doubleGunTimer / 60)}s).`;
+  } else {
+    ui.story.textContent = level.story;
+  }
 }
 
 function takePlayerDamage(amount) {
@@ -153,7 +169,13 @@ function spawnExplosion(x, y, color = "#ff9f1c", radius = 50) {
 }
 
 function shoot() {
-  game.bullets.push({ x: player.x + player.width, y: player.y + player.height / 2, vx: 8.8, size: 4 });
+  const centerY = player.y + player.height / 2;
+  if (player.doubleGunTimer > 0) {
+    game.bullets.push({ x: player.x + player.width, y: centerY - 9, vx: 9.2, size: 4.4 });
+    game.bullets.push({ x: player.x + player.width, y: centerY + 9, vx: 9.2, size: 4.4 });
+  } else {
+    game.bullets.push({ x: player.x + player.width, y: centerY, vx: 8.8, size: 4 });
+  }
 }
 
 function launchGrenade() {
@@ -165,7 +187,8 @@ function launchGrenade() {
     y: player.y + player.height / 2,
     vx: 4.8,
     life: 130,
-    radius: 120,
+    radius: 175,
+    damage: 90,
     exploded: false
   });
   player.grenades -= 1;
@@ -183,8 +206,8 @@ function detonateGrenade(grenade) {
     const dist = Math.hypot(ex - grenade.x, ey - grenade.y);
     if (dist <= grenade.radius) {
       enemy.dead = true;
-      game.score += 35;
-      spawnExplosion(ex, ey, enemy.color, 45);
+      game.score += 45;
+      spawnExplosion(ex, ey, enemy.color, 62);
     }
   });
 
@@ -192,8 +215,9 @@ function detonateGrenade(grenade) {
     const bx = game.boss.x + game.boss.width / 2;
     const by = game.boss.y + game.boss.height / 2;
     const dist = Math.hypot(bx - grenade.x, by - grenade.y);
-    if (dist <= grenade.radius + 50) {
-      game.boss.health -= 50;
+    if (dist <= grenade.radius + 60) {
+      game.boss.health -= grenade.damage;
+      spawnExplosion(bx, by, "#ffd166", 65);
       if (game.boss.health <= 0) {
         game.score += 200;
         spawnExplosion(bx, by, game.boss.color, 140);
@@ -215,6 +239,19 @@ function spawnEnemy() {
       color: level.enemyColor,
       hp: 24 + game.levelIndex * 12,
       thruster: Math.random() * Math.PI * 2
+    });
+  }
+}
+
+function maybeSpawnPowerUp(x, y) {
+  if (Math.random() < 0.13) {
+    game.powerUps.push({
+      x,
+      y,
+      vx: -2.2,
+      size: 16,
+      kind: "doubleGun",
+      pulse: 0
     });
   }
 }
@@ -243,6 +280,7 @@ function progressLevel() {
     game.levelIndex += 1;
     game.enemies = [];
     game.enemyBullets = [];
+    game.powerUps = [];
     game.grenades = [];
     game.boss = null;
     game.bossActive = false;
@@ -340,6 +378,7 @@ function update() {
           enemy.dead = true;
           game.score += 30;
           spawnExplosion(enemy.x + enemy.size / 2, enemy.y + enemy.size / 2, enemy.color, 45);
+          maybeSpawnPowerUp(enemy.x + enemy.size / 2, enemy.y + enemy.size / 2);
         }
       }
     });
@@ -361,6 +400,12 @@ function update() {
   });
 
   game.enemies = game.enemies.filter((e) => !e.dead);
+
+  game.powerUps.forEach((powerUp) => {
+    powerUp.x += powerUp.vx;
+    powerUp.pulse += 0.2;
+  });
+  game.powerUps = game.powerUps.filter((powerUp) => powerUp.x > -30);
 
   const playerRect = { x: player.x, y: player.y, width: player.width, height: player.height };
 
@@ -387,7 +432,22 @@ function update() {
     }
   }
 
+  game.powerUps.forEach((powerUp) => {
+    if (
+      powerUp.x > player.x &&
+      powerUp.x < player.x + player.width &&
+      powerUp.y > player.y &&
+      powerUp.y < player.y + player.height
+    ) {
+      player.doubleGunTimer = 15 * 60;
+      spawnExplosion(powerUp.x, powerUp.y, "#90e0ef", 55);
+      powerUp.collected = true;
+    }
+  });
+  game.powerUps = game.powerUps.filter((powerUp) => !powerUp.collected);
+
   if (player.damageFlash > 0) player.damageFlash -= 1;
+  if (player.doubleGunTimer > 0) player.doubleGunTimer -= 1;
 
   game.explosions.forEach((blast) => {
     blast.life -= 1;
@@ -442,6 +502,10 @@ function drawPlayerShip() {
   ctx.fillStyle = "#d4f4ff";
   ctx.fillRect(22, 13, 20, 12);
 
+  ctx.fillStyle = player.doubleGunTimer > 0 ? "#90e0ef" : "#264653";
+  ctx.fillRect(46, 10, 8, 6);
+  ctx.fillRect(46, player.height - 16, 8, 6);
+
   ctx.fillStyle = flashing ? "#ffd166" : "#ff7f50";
   const flameSize = 5 + Math.random() * 6;
   ctx.beginPath();
@@ -489,6 +553,11 @@ function drawBossShip() {
   ctx.fillStyle = boss.color;
   ctx.fillRect(boss.x, boss.y + 18, boss.width, boss.height - 36);
 
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  for (let i = 0; i < 4; i += 1) {
+    ctx.fillRect(boss.x + 16 + i * 34, boss.y + 28, 20, boss.height - 56);
+  }
+
   ctx.beginPath();
   ctx.moveTo(boss.x + boss.width, boss.y + boss.height / 2);
   ctx.lineTo(boss.x + boss.width - 32, boss.y + 2);
@@ -500,6 +569,18 @@ function drawBossShip() {
 
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.fillRect(boss.x + 20, boss.y + 30, boss.width - 52, boss.height - 60);
+
+  ctx.fillStyle = "#94d2bd";
+  ctx.fillRect(boss.x + boss.width - 30, boss.y + boss.height / 2 - 8, 14, 16);
+  ctx.fillRect(boss.x + 8, boss.y + 26, 10, 12);
+  ctx.fillRect(boss.x + 8, boss.y + boss.height - 38, 10, 12);
+
+  ctx.strokeStyle = "rgba(255, 209, 102, 0.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(boss.x + 26, boss.y + boss.height / 2);
+  ctx.lineTo(boss.x + boss.width - 36, boss.y + boss.height / 2);
+  ctx.stroke();
 
   ctx.fillStyle = "#fefefe";
   ctx.font = "15px sans-serif";
@@ -566,6 +647,21 @@ function draw() {
     ctx.fill();
     ctx.fillStyle = "#fff1c1";
     ctx.fillRect(grenade.x - 2, grenade.y - 2, 4, 4);
+  });
+
+  game.powerUps.forEach((powerUp) => {
+    const pulse = 1 + Math.sin(powerUp.pulse) * 0.2;
+    ctx.save();
+    ctx.translate(powerUp.x, powerUp.y);
+    ctx.scale(pulse, pulse);
+    ctx.fillStyle = "#90e0ef";
+    ctx.beginPath();
+    ctx.arc(0, 0, powerUp.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#023047";
+    ctx.fillRect(-7, -2, 14, 4);
+    ctx.fillRect(-2, -7, 4, 14);
+    ctx.restore();
   });
 
   game.enemyBullets.forEach((bullet) => {
