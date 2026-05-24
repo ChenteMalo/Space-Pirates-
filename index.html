@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Space Pirates: Starwake Siege</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="game-layout">
+      <section class="hud-panel">
+        <h1>☠️ Space Pirates: Starwake Siege</h1>
+        <p>
+          Defend the Starwake lanes with Captain Rhea Starflare and her crew.
+          Blast rogue drones, survive pirate ambushes, and defeat rival captains
+          across three story levels.
+        </p>
+        <div class="stats">
+          <div><span>Level:</span> <strong id="levelLabel">1</strong></div>
+          <div><span>Score:</span> <strong id="scoreLabel">0</strong></div>
+          <div><span>High Score:</span> <strong id="highScoreLabel">0</strong></div>
+          <div id="highScoreEntry" class="high-score-entry hidden">
+            <label for="highScoreName">New High Score Pilot:</label>
+            <input id="highScoreName" maxlength="14" placeholder="Enter name" />
+            <button id="saveHighScoreBtn" type="button">Save</button>
+          </div>
+          <div><span>Hull:</span> <strong id="healthLabel">100</strong></div>
+          <div><span>Grenades:</span> <strong id="grenadeLabel">5</strong></div>
+          <div><span>Crew:</span> <strong id="characterLabel">Captain Rhea Starflare</strong></div>
+        </div>
+        <div class="controls">
+          <h2>Controls</h2>
+          <ul>
+            <li>Move: Arrow Keys / WASD</li>
+            <li>Shoot: Space bar</li>
+            <li>Launch grenade: G (5 per run)</li>
+            <li>Weapon power-up = Twin/Quad cannons</li>
+            <li>Shield power-up = temporary damage reduction</li>
+            <li>Repair power-up = restores hull</li>
+            <li>Pause: P</li>
+            <li>Restart after defeat: R</li>
+          </ul>
+          <button id="musicToggleBtn" type="button">🎵 Start Epic Music</button>
+        </div>
+        <div id="storyPanel" class="story-panel"></div>
+      </section>
+
+      <section class="canvas-panel">
+        <canvas id="game" width="960" height="540"></canvas>
+      </section>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>
